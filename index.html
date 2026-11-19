@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lego 42176 – direção com retorno ao centro</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#d5dce2;--acc:#0a6e8a;--accink:#fff;--bad:#c62828;--ok:#2e7d32;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10171d;--card:#18222b;--ink:#e8eef3;--mute:#93a3b1;--line:#2c3a46;--acc:#4cc3e0;--accink:#06222b;--bad:#ff6b6b;--ok:#6fd37a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10171d;--card:#18222b;--ink:#e8eef3;--mute:#93a3b1;--line:#2c3a46;--acc:#4cc3e0;--accink:#06222b;--bad:#ff6b6b;--ok:#6fd37a;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:14px}
+h1{font-size:1.25rem;margin:4px 0 12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+h2{font-size:1rem;margin:0 0 8px}
+p,small{color:var(--mute);margin:4px 0 8px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:10px 12px;margin:3px 3px 3px 0;min-height:44px}
+button.main{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+button.stop{background:var(--bad);color:#fff;border-color:var(--bad);font-weight:700;width:100%;min-height:56px;font-size:1.1rem}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+label{display:block;margin:8px 0 2px}
+input[type=range]{width:100%}
+.row{display:flex;justify-content:space-between;gap:8px}
+.bar{height:10px;background:var(--line);border-radius:5px;position:relative;margin:4px 0 8px;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;background:var(--acc)}
+#st{font-weight:600}
+#log{font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--mute);max-height:110px;overflow:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+<h1>Lego 42176: direção com retorno ao centro</h1>
+
+<section>
+<h2>1. Ligar</h2>
+<p>Fecha o Control+ e outras páginas Bluetooth. Liga o hub (botão verde a piscar) e carrega em Ligar.</p>
+<button class="main" id="bConn">Ligar ao hub</button>
+<span id="st">Desligado</span>
+</section>
+
+<section>
+<h2>2. Centrar a direção</h2>
+<p>Carrega em “Soltar direção”, endireita as rodas à mão e carrega em “Definir centro”. Repete sempre que ligares o hub.</p>
+<button id="bFree">Soltar direção</button>
+<button class="main" id="bCenter">Definir centro</button><br>
+<button id="bL">Testar máx. esquerda</button>
+<button id="bR">Testar máx. direita</button>
+<button id="bC">Ir ao centro</button>
+</section>
+
+<section>
+<h2>3. Definições</h2>
+<label>Ângulo máximo da direção: <b id="vAng"></b>°</label>
+<input type="range" id="ang" min="10" max="120" step="1">
+<label>Limite de potência da tração: <b id="vPow"></b>%</label>
+<input type="range" id="pow" min="10" max="100" step="5">
+<label><input type="checkbox" id="invS"> Inverter sentido da direção</label>
+<label><input type="checkbox" id="invA"> Inverter motor 0x32</label>
+<label><input type="checkbox" id="invB"> Inverter motor 0x33</label>
+<p>Antes de conduzir, levanta o carro e testa a tração:</p>
+<button id="tA">Testar motor 0x32</button>
+<button id="tB">Testar motor 0x33</button>
+</section>
+
+<section>
+<h2>Comando</h2>
+<div id="gp">Carrega num botão do comando para o ativar.</div>
+<small>Direção (analógico esquerdo)</small>
+<div class="bar"><i id="bSt"></i></div>
+<small>Tração (R2 frente, L2 trás)</small>
+<div class="bar"><i id="bDr"></i></div>
+<div id="log"></div>
+</section>
+
+<button class="stop" id="bStop">PARAR TRAÇÃO</button>
+</main>
+<script>
+(function(){
+var SVC="00001623-1212-efde-1623-785feabcd123",CHR="00001624-1212-efde-1623-785feabcd123";
+var PA=0x32,PB=0x33,PS=0x34;
+var $=function(i){return document.getElementById(i)};
+var cfg={ang:60,pow:40,invS:false,invA:false,invB:false};
+try{var s=JSON.parse(localStorage.getItem("cfg42176")||"{}");for(var k in s)cfg[k]=s[k];}catch(e){}
+function save(){try{localStorage.setItem("cfg42176",JSON.stringify(cfg));}catch(e){}}
+function log(t){var l=$("log");l.textContent=t+"\n"+l.textContent.slice(0,600);}
+function ui(){$("ang").value=cfg.ang;$("pow").value=cfg.pow;$("vAng").textContent=cfg.ang;$("vPow").textContent=cfg.pow;
+$("invS").checked=cfg.invS;$("invA").checked=cfg.invA;$("invB").checked=cfg.invB;}
+ui();
+$("ang").oninput=function(){cfg.ang=+this.value;ui();save();};
+$("pow").oninput=function(){cfg.pow=+this.value;ui();save();};
+["invS","invA","invB"].forEach(function(id){$(id).onchange=function(){cfg[id]=this.checked;save();};});
+
+/* bytes do protocolo LEGO Wireless (LWP3) */
+function i32(n){return [n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255];}
+function s8(n){return n&255;}
+function power(p,v){return [8,0,0x81,p,0x11,0x51,0,s8(v)];}
+function gotoPos(p,pos,spd,pw,end){return [14,0,0x81,p,0x11,0x0d].concat(i32(pos),[s8(spd),pw,s8(end),0]);}
+function preset(p,pos){return [11,0,0x81,p,0x11,0x51,2].concat(i32(pos));}
+
+/* envio em série: uma escrita de cada vez, só a mais recente de cada tipo */
+var ch=null,busy=false,pend=new Map();
+function send(key,b){pend.set(key,b);pump();}
+async function pump(){
+ if(busy||!ch)return;busy=true;
+ try{while(pend.size&&ch){var e=pend.entries().next().value;pend.delete(e[0]);
+  var d=new Uint8Array(e[1]);
+  try{if(ch.writeValueWithoutResponse)await ch.writeValueWithoutResponse(d);else await ch.writeValue(d);}
+  catch(err){log("Erro de escrita: "+err.message);await new Promise(function(r){setTimeout(r,60)});}
+ }}finally{busy=false;}
+}
+var lastD=null,lastT=null,lastA=null,lastB=null;
+function drive(a,b){ // a,b em -100..100
+ var va=Math.round(cfg.invA?-a:a),vb=Math.round(cfg.invB?-b:b);
+ if(va!==lastA){lastA=va;send("A",power(PA,va));}
+ if(vb!==lastB){lastB=vb;send("B",power(PB,vb));}
+}
+function stopDrive(){lastA=lastB=null;drive(0,0);}
+function steer(deg){
+ deg=Math.max(-cfg.ang,Math.min(cfg.ang,Math.round(deg)));
+ if(deg===lastT)return;lastT=deg;
+ send("S",gotoPos(PS,cfg.invS?-deg:deg,80,70,126));
+}
+
+/* ligação */
+var dev=null;
+$("bConn").onclick=async function(){
+ if(!navigator.bluetooth){$("st").textContent="Web Bluetooth indisponível";return;}
+ try{
+  $("st").textContent="A procurar…";
+  dev=await navigator.bluetooth.requestDevice({filters:[{services:[SVC]}],optionalServices:[SVC]});
+  dev.addEventListener("gattserverdisconnected",function(){ch=null;pend.clear();$("st").textContent="Desligado";log("Hub desligado.");});
+  var srv=await dev.gatt.connect();
+  var svc=await srv.getPrimaryService(SVC);
+  ch=await svc.getCharacteristic(CHR);
+  lastD=lastT=lastA=lastB=null;
+  $("st").textContent="Ligado a "+(dev.name||"hub");
+  log("Ligado. Define o centro da direção.");
+ }catch(e){$("st").textContent="Falhou";log("Erro: "+e.message);}
+};
+
+/* calibração e testes */
+$("bFree").onclick=function(){lastT=null;send("S",power(PS,0));log("Direção solta. Endireita as rodas à mão.");};
+$("bCenter").onclick=function(){send("P",preset(PS,0));lastT=null;log("Centro definido (0°).");};
+$("bL").onclick=function(){lastT=null;steer(-cfg.ang);};
+$("bR").onclick=function(){lastT=null;steer(cfg.ang);};
+$("bC").onclick=function(){lastT=null;steer(0);};
+function testMotor(which){
+ var p=which==="A"?PA:PB,inv=which==="A"?cfg.invA:cfg.invB,v=inv?-20:20;
+ send("T"+which,power(p,v));
+ setTimeout(function(){send("T"+which,power(p,0));},1500);
+}
+$("tA").onclick=function(){testMotor("A");};
+$("tB").onclick=function(){testMotor("B");};
+$("bStop").onclick=stopDrive;
+document.addEventListener("visibilitychange",function(){if(document.hidden)stopDrive();});
+
+/* comando */
+var had=false;
+function setBar(el,v){ // v em -1..1
+ var w=Math.abs(v)*50;el.style.width=w+"%";el.style.left=v<0?(50-w)+"%":"50%";
+}
+setInterval(function(){
+ var pads=navigator.getGamepads?navigator.getGamepads():[];var g=null;
+ for(var i=0;i<pads.length;i++){if(pads[i]&&pads[i].connected){g=pads[i];break;}}
+ if(!g){if(had){had=false;stopDrive();$("gp").textContent="Comando desligado: tração parada.";}return;}
+ had=true;$("gp").textContent="Comando: "+g.id.slice(0,40);
+ var x=g.axes[0]||0;if(Math.abs(x)<0.08)x=0;
+ var r2=g.buttons[7]?g.buttons[7].value:0,l2=g.buttons[6]?g.buttons[6].value:0;
+ var d=(r2-l2);if(Math.abs(d)<0.05)d=0;
+ setBar($("bSt"),x);setBar($("bDr"),d);
+ if(!ch)return;
+ steer(x*cfg.ang);
+ var p=d*cfg.pow;drive(p,p);
+},50);
+})();
+</script>
+</body>
+</html>
