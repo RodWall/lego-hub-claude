@@ -48,6 +48,10 @@ input[type=range]{width:100%}
 <button id="bL">Testar máx. esquerda</button>
 <button id="bR">Testar máx. direita</button>
 <button id="bC">Ir ao centro</button>
+<label>Ajuste fino do centro: <b id="vTrim"></b>°</label>
+<input type="range" id="trim" min="-20" max="20" step="0.5">
+<button id="tM">− 0,5°</button>
+<button id="tP">+ 0,5°</button>
 </section>
 
 <section>
@@ -81,15 +85,19 @@ input[type=range]{width:100%}
 var SVC="00001623-1212-efde-1623-785feabcd123",CHR="00001624-1212-efde-1623-785feabcd123";
 var PA=0x32,PB=0x33,PS=0x34;
 var $=function(i){return document.getElementById(i)};
-var cfg={ang:60,pow:40,invS:false,invA:false,invB:false};
+var cfg={ang:60,pow:40,invS:false,invA:false,invB:false,trim:0};
 try{var s=JSON.parse(localStorage.getItem("cfg42176")||"{}");for(var k in s)cfg[k]=s[k];}catch(e){}
 function save(){try{localStorage.setItem("cfg42176",JSON.stringify(cfg));}catch(e){}}
 function log(t){var l=$("log");l.textContent=t+"\n"+l.textContent.slice(0,600);}
 function ui(){$("ang").value=cfg.ang;$("pow").value=cfg.pow;$("vAng").textContent=cfg.ang;$("vPow").textContent=cfg.pow;
-$("invS").checked=cfg.invS;$("invA").checked=cfg.invA;$("invB").checked=cfg.invB;}
+$("invS").checked=cfg.invS;$("invA").checked=cfg.invA;$("invB").checked=cfg.invB;$("trim").value=cfg.trim;$("vTrim").textContent=cfg.trim;}
 ui();
 $("ang").oninput=function(){cfg.ang=+this.value;ui();save();};
 $("pow").oninput=function(){cfg.pow=+this.value;ui();save();};
+function setTrim(v){cfg.trim=Math.max(-20,Math.min(20,Math.round(v*2)/2));ui();save();lastT=null;if(ch)steer(reqDeg);}
+$("trim").oninput=function(){setTrim(+this.value);};
+$("tM").onclick=function(){setTrim(cfg.trim-0.5);};
+$("tP").onclick=function(){setTrim(cfg.trim+0.5);};
 ["invS","invA","invB"].forEach(function(id){$(id).onchange=function(){cfg[id]=this.checked;save();};});
 
 /* bytes do protocolo LEGO Wireless (LWP3) */
@@ -117,10 +125,12 @@ function drive(a,b){ // a,b em -100..100
  if(vb!==lastB){lastB=vb;send("B",power(PB,vb));}
 }
 function stopDrive(){lastA=lastB=null;drive(0,0);}
+var reqDeg=0;
 function steer(deg){
  deg=Math.max(-cfg.ang,Math.min(cfg.ang,Math.round(deg)));
+ reqDeg=deg;
  if(deg===lastT)return;lastT=deg;
- send("S",gotoPos(PS,cfg.invS?-deg:deg,80,70,126));
+ send("S",gotoPos(PS,Math.round((cfg.invS?-deg:deg)+cfg.trim),80,70,126));
 }
 
 /* ligação */
