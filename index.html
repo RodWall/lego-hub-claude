@@ -69,14 +69,6 @@ input[type=range]{width:100%}
 </section>
 
 <section>
-<h2>Luzes</h2>
-<p>Indica o porto das luzes: decimal (ex. 53) ou hex (ex. 0x35), vários separados por vírgulas. No Move Hub Pad, vê no separador Ports. O botão X do comando liga e desliga.</p>
-<input type="text" id="lp" placeholder="ex. 53,54" style="width:100%;font:inherit;padding:10px;box-sizing:border-box;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px">
-<button class="main" id="bLight">Luzes: desligadas</button>
-<button id="bScan">Procurar luzes</button>
-</section>
-
-<section>
 <h2>Comando</h2>
 <div id="gp">Carrega num botão do comando para o ativar.</div>
 <small>Direção (analógico esquerdo)</small>
@@ -93,7 +85,7 @@ input[type=range]{width:100%}
 var SVC="00001623-1212-efde-1623-785feabcd123",CHR="00001624-1212-efde-1623-785feabcd123";
 var PA=0x32,PB=0x33,PS=0x34;
 var $=function(i){return document.getElementById(i)};
-var cfg={ang:60,pow:40,invS:false,invA:false,invB:false,trim:0,lp:""};
+var cfg={ang:60,pow:40,invS:false,invA:false,invB:false,trim:0};
 try{var s=JSON.parse(localStorage.getItem("cfg42176")||"{}");for(var k in s)cfg[k]=s[k];}catch(e){}
 function save(){try{localStorage.setItem("cfg42176",JSON.stringify(cfg));}catch(e){}}
 function log(t){var l=$("log");l.textContent=t+"\n"+l.textContent.slice(0,600);}
@@ -153,7 +145,7 @@ $("bConn").onclick=async function(){
   var svc=await srv.getPrimaryService(SVC);
   ch=await svc.getCharacteristic(CHR);
   lastD=lastT=lastA=lastB=null;
-  lightOn=false;$("bLight").textContent="Luzes: desligadas";$("st").textContent="Ligado a "+(dev.name||"hub");
+  $("st").textContent="Ligado a "+(dev.name||"hub");
   log("Ligado. Define o centro da direção.");
  }catch(e){$("st").textContent="Falhou";log("Erro: "+e.message);}
 };
@@ -174,30 +166,6 @@ $("tB").onclick=function(){testMotor("B");};
 $("bStop").onclick=stopDrive;
 document.addEventListener("visibilitychange",function(){if(document.hidden)stopDrive();});
 
-/* luzes */
-var lightOn=false,xPrev=false;
-function sleep(ms){return new Promise(function(r){setTimeout(r,ms)});}
-function lports(){return String(cfg.lp||"").split(",").map(function(s){return parseInt(s.trim(),0);}).filter(function(n){return n>=0&&n<=255;});}
-function setLights(on){
- var ps=lports();if(!ps.length){log("Indica primeiro o porto das luzes.");return;}
- lightOn=on;ps.forEach(function(p){send("L"+p,power(p,on?100:0));});
- $("bLight").textContent="Luzes: "+(on?"ligadas":"desligadas");
-}
-$("lp").value=cfg.lp||"";
-$("lp").oninput=function(){cfg.lp=this.value;save();};
-$("bLight").onclick=function(){if(!ch){log("Liga primeiro ao hub.");return;}setLights(!lightOn);};
-$("bScan").onclick=async function(){
- if(!ch){log("Liga primeiro ao hub.");return;}
- var c=[0,1,2,3,4,5,0x35,0x36,0x37,0x38];
- log("A testar portos (exceto 50, 51 e 52). Vê qual acende.");
- for(var i=0;i<c.length;i++){
-  log("Porto "+c[i]+" (0x"+c[i].toString(16)+")");
-  send("X",power(c[i],100));await sleep(1500);
-  send("X",power(c[i],0));await sleep(400);
- }
- log("Fim do teste.");
-};
-
 /* comando */
 var had=false;
 function setBar(el,v){ // v em -1..1
@@ -212,9 +180,6 @@ setInterval(function(){
  var r2=g.buttons[7]?g.buttons[7].value:0,l2=g.buttons[6]?g.buttons[6].value:0;
  var d=(r2-l2);if(Math.abs(d)<0.05)d=0;
  setBar($("bSt"),x);setBar($("bDr"),d);
- var xb=!!(g.buttons[0]&&g.buttons[0].pressed);
- if(xb&&!xPrev&&ch)setLights(!lightOn);
- xPrev=xb;
  if(!ch)return;
  steer(x*cfg.ang);
  var p=d*cfg.pow;drive(p,p);
